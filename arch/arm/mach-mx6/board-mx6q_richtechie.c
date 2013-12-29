@@ -762,6 +762,11 @@ static void __init mx6_richtechie_board_init(void)
 	imx6q_add_sdhci_usdhc_imx(3, &mx6q_richtechie_sd4_data);
 	imx6q_add_sdhci_usdhc_imx(2, &mx6q_richtechie_sd3_data);
 
+
+#ifndef CONFIG_MX6_INTER_LDO_BYPASS
+	mx6_cpu_regulator_init();
+#endif
+
 	printk("---richtechie board init end---\015\n");
 }
 

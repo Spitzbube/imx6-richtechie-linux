@@ -45,9 +45,7 @@
 #include <linux/fec.h>
 #include <linux/memblock.h>
 #include <linux/gpio.h>
-#if defined(CONFIG_ION)
 #include <linux/ion.h>
-#endif
 #include <linux/etherdevice.h>
 #include <linux/regulator/anatop-regulator.h>
 #include <linux/regulator/consumer.h>
@@ -90,8 +88,19 @@
 #include "board-mx6q_richtechie.h"
 
 //#define IMX_GPIO_NR(bank, nr)		(((bank) - 1) * 32 + (nr))
+//#define SABRESD_USB_H1_PWR	IMX_GPIO_NR(1, 29)
+#define RICHTECHIE_LCD_EN	IMX_GPIO_NR(1, 8)
+#define RICHTECHIE_LDB_PWR	IMX_GPIO_NR(2, 4)
+#define RICHTECHIE_LDB_BACKLIGHT	IMX_GPIO_NR(2, 5)
+#define RICHTECHIE_VOLUME_DN	IMX_GPIO_NR(3, 16)
+#define RICHTECHIE_POWER_OFF	IMX_GPIO_NR(3, 18)
+#define RICHTECHIE_BACK		IMX_GPIO_NR(3, 19)
+#define RICHTECHIE_VOLUME_UP	IMX_GPIO_NR(3, 20)
+#define RICHTECHIE_USB_OTG_PWR	IMX_GPIO_NR(3, 22)
+#define RICHTECHIE_SPEAKER_EN	IMX_GPIO_NR(3, 31)
 #define RICHTECHIE_SENSOR_INT1	IMX_GPIO_NR(4, 14)
 #define RICHTECHIE_SENSOR_INT2	IMX_GPIO_NR(4, 15)
+#define RICHTECHIE_HEADPHONE_DET	IMX_GPIO_NR(6, 7)
 #define RICHTECHIE_TS_INT		IMX_GPIO_NR(6, 9)
 #define RICHTECHIE_SD3_CD		IMX_GPIO_NR(6, 11)
 
@@ -407,10 +416,87 @@ static const struct imxuart_platform_data mx6_richtechie_uart4_data __initconst 
 	.dma_req_tx = MX6Q_DMA_REQ_UART5_TX,
 };
 
+static const struct anatop_thermal_platform_data
+	mx6q_richtechie_anatop_thermal_data __initconst = {
+		.name = "anatop_thermal",
+};
+
 static inline void mx6q_richtechie_init_uart(void)
 {
 	imx6q_add_imx_uart(3, NULL);
 	imx6q_add_imx_uart(4, &mx6_richtechie_uart4_data);
+}
+
+static struct imx_ssi_platform_data mx6_richtechie_ssi_pdata = {
+	.flags = IMX_SSI_DMA | IMX_SSI_SYN,
+};
+
+static struct platform_device mx6_richtechie_audio_wm8960_device = {
+	.name = "imx-wm8960",
+};
+
+static struct mxc_audio_platform_data wm8960_data = {
+	.ssi_num = 1,
+	.src_port = 2,
+	.ext_port = 4,
+	.hp_gpio = RICHTECHIE_HEADPHONE_DET,
+	.hp_active_low = 1,
+	.mic_active_low = 1,
+};
+
+static int mxc_wm8960_init(void)
+{
+	struct clk *clko; //r4
+	struct clk *new_parent; //r5
+	int rate;
+
+	clko = clk_get(NULL, "clko_clk");
+	if (IS_ERR(clko)) {
+		pr_err("can't get CLKO clock.\n");
+		return PTR_ERR(clko);
+	}
+
+	new_parent = clk_get(NULL, "ipg_clk");
+	if (!IS_ERR(new_parent)) {
+		clk_set_parent(clko, new_parent);
+		clk_put(new_parent);
+	}
+
+	printk("clko clk = %lu \n", clk_get_rate(clko));
+	printk("clko parent clk = %lu \n", clk_get_rate(new_parent));
+
+	/* both audio codec and comera use CLKO clk*/
+	rate = clk_round_rate(clko, 12000000);
+
+	wm8960_data.sysclk = rate;
+	clk_set_rate(clko, rate);
+	clk_enable(clko);
+
+	return 0;
+}
+
+
+/*static*/ void richtechie_init_lcd(void)
+{
+	gpio_request(RICHTECHIE_LDB_BACKLIGHT, "ldb-backlight");
+	gpio_direction_output(RICHTECHIE_LDB_BACKLIGHT, 0);
+
+	gpio_request(RICHTECHIE_LDB_PWR, "ldb-pwr");
+	gpio_direction_output(RICHTECHIE_LDB_PWR, 0);
+
+	gpio_set_value(RICHTECHIE_LDB_PWR, 0);
+	gpio_set_value(RICHTECHIE_LDB_PWR, 0);
+
+	msleep(200);
+
+	gpio_set_value(RICHTECHIE_LDB_BACKLIGHT, 1);
+
+	gpio_request(RICHTECHIE_LCD_EN, "lcd_en");
+
+	msleep(10);
+
+	gpio_direction_output(RICHTECHIE_LCD_EN, 1);
+	gpio_set_value(RICHTECHIE_LCD_EN, 1);
 }
 
 
@@ -547,9 +633,54 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 	},
 };
 
+
+static void imx6q_richtechie_usbotg_vbus(bool on)
+{
+	if (on)
+		gpio_set_value(RICHTECHIE_USB_OTG_PWR, 1);
+	else
+		gpio_set_value(RICHTECHIE_USB_OTG_PWR, 0);
+}
+
+static void __init imx6q_richtechie_init_usb(void)
+{
+	int ret = 0;
+
+	imx_otg_base = MX6_IO_ADDRESS(MX6Q_USB_OTG_BASE_ADDR);
+	/* disable external charger detect,
+	 * or it will affect signal quality at dp .
+	 */
+	ret = gpio_request(RICHTECHIE_USB_OTG_PWR, "usb-pwr");
+	if (ret) {
+		pr_err("failed to get GPIO MX6Q_RT_USB_OTG_PWR: %d\n",
+			ret);
+		return;
+	}
+	gpio_direction_output(RICHTECHIE_USB_OTG_PWR, 0);
+#if 0
+	/* keep USB host1 VBUS always on */
+	ret = gpio_request(SABRESD_USB_H1_PWR, "usb-h1-pwr");
+	if (ret) {
+		pr_err("failed to get GPIO SABRESD_USB_H1_PWR: %d\n",
+			ret);
+		return;
+	}
+	gpio_direction_output(SABRESD_USB_H1_PWR, 1);
+#endif
+	mxc_iomux_set_gpr_register(1, 13, 1, 1);
+	mx6_set_otghost_vbus_func(imx6q_richtechie_usbotg_vbus);
+	mx6_usb_dr_init();
+}
+
 static struct viv_gpu_platform_data imx6q_gpu_pdata __initdata = {
 	.reserved_mem_size = SZ_128M + SZ_64M,
 };
+
+static struct imx_asrc_platform_data imx_asrc_data = {
+	.channel_bits = 4,
+	.clk_map_ver = 2,
+};
+
 
 static struct ipuv3_fb_platform_data richtechie_fb_data[] = {
 	{ /*fb0*/
@@ -567,6 +698,35 @@ static struct ipuv3_fb_platform_data richtechie_fb_data[] = {
 	},
 };
 
+
+static void hdmi_init(int ipu_id, int disp_id)
+{
+	int hdmi_mux_setting;
+
+	if ((ipu_id > 1) || (ipu_id < 0)) {
+		pr_err("Invalid IPU select for HDMI: %d. Set to 0\n", ipu_id);
+		ipu_id = 0;
+	}
+
+	if ((disp_id > 1) || (disp_id < 0)) {
+		pr_err("Invalid DI select for HDMI: %d. Set to 0\n", disp_id);
+		disp_id = 0;
+	}
+
+	/* Configure the connection between IPU1/2 and HDMI */
+	hdmi_mux_setting = 2*ipu_id + disp_id;
+
+	/* GPR3, bits 2-3 = HDMI_MUX_CTL */
+	mxc_iomux_set_gpr_register(3, 2, 2, hdmi_mux_setting);
+
+	/* Set HDMI event as SDMA event2 while Chip version later than TO1.2 */
+	if (hdmi_SDMA_check())
+		mxc_iomux_set_gpr_register(0, 0, 1, 1);
+}
+
+static struct fsl_mxc_hdmi_platform_data hdmi_data = {
+	.init = hdmi_init,
+};
 
 static struct fsl_mxc_hdmi_core_platform_data hdmi_core_data = {
 	.ipu_id = 0,
@@ -594,6 +754,81 @@ static struct imx_ipuv3_platform_data ipu_data[] = {
 	},
 };
 
+#define GPIO_BUTTON(gpio_num, ev_code, act_low, descr, wake, debounce)	\
+{								\
+	.gpio		= gpio_num,				\
+	.type		= EV_KEY,				\
+	.code		= ev_code,				\
+	.active_low	= act_low,				\
+	.desc		= "btn " descr,				\
+	.wakeup		= wake,					\
+	.debounce_interval = debounce,				\
+}
+
+static struct gpio_keys_button richtechie_buttons[] = {
+	GPIO_BUTTON(RICHTECHIE_POWER_OFF, KEY_POWER, 1, "key-power", 1, 0),
+	GPIO_BUTTON(RICHTECHIE_BACK, KEY_BACK, 1, "key-back", 0, 0),
+	GPIO_BUTTON(RICHTECHIE_VOLUME_UP, KEY_VOLUMEUP, 1, "volume-up", 0, 0),
+	GPIO_BUTTON(RICHTECHIE_VOLUME_DN, KEY_VOLUMEDOWN, 1, "volume-down", 0, 0),
+};
+
+static struct gpio_keys_platform_data richtechie_button_data = {
+	.buttons	= richtechie_buttons,
+	.nbuttons	= ARRAY_SIZE(richtechie_buttons),
+};
+
+static struct platform_device richtechie_button_device = {
+	.name		= "gpio-keys",
+	.id		= -1,
+	.num_resources  = 0,
+	.dev		= {
+		.platform_data = &richtechie_button_data,
+	}
+};
+
+static void __init imx6q_add_device_buttons(void)
+{
+#if 0
+	if (mx6q_revision() >= IMX_CHIP_REVISION_1_2 ||
+			mx6dl_revision() >= IMX_CHIP_REVISION_1_1)
+		platform_device_add_data(&richtechie_button_device,
+				&new_sabresd_button_data,
+				sizeof(new_sabresd_button_data));
+	else
+		platform_device_add_data(&richtechie_button_device,
+				&sabresd_button_data,
+				sizeof(sabresd_button_data));
+#endif
+
+	platform_device_register(&richtechie_button_device);
+}
+
+static struct platform_pwm_backlight_data mx6_richtechie_pwm_backlight_data = {
+	.pwm_id		= 0,
+	.max_brightness	= 255,
+	.dft_brightness	= 100,
+	.pwm_period_ns	= 500000,
+};
+
+static struct platform_device Data_C07C3220 = {
+	.name = "rbsys",
+};
+
+static struct {int dummy; } Data_C07C3388 = {
+		0
+};
+
+static struct ion_platform_data imx_ion_data = {
+	.nr = 1,
+	.heaps = {
+		{
+		.type = ION_HEAP_TYPE_CARVEOUT,
+		.name = "vpu_ion",
+		.size = SZ_64M,
+		},
+	},
+};
+
 
 static struct fsl_mxc_capture_platform_data capture_data[] = {
 	{
@@ -608,6 +843,66 @@ static struct fsl_mxc_capture_platform_data capture_data[] = {
 		.is_mipi = 1,
 	},
 };
+
+static void richtechie_suspend_enter(void)
+{
+	/* suspend preparation */
+	/* Disable AUX 5V */
+//	gpio_set_value(SABRESD_AUX_5V_EN, 0);
+}
+
+static void richtechie_suspend_exit(void)
+{
+	/* resume restore */
+	/* Enable AUX 5V */
+//	gpio_set_value(SABRESD_AUX_5V_EN, 1);
+}
+static const struct pm_platform_data mx6q_richtechie_pm_data __initconst = {
+	.name = "imx_pm",
+	.suspend_enter = richtechie_suspend_enter,
+	.suspend_exit = richtechie_suspend_exit,
+};
+
+static struct regulator_consumer_supply richtechie_vmmc_consumers[] = {
+	REGULATOR_SUPPLY("vmmc", "sdhci-esdhc-imx.2"),
+	REGULATOR_SUPPLY("vmmc", "sdhci-esdhc-imx.3"),
+};
+
+static struct regulator_init_data richtechie_vmmc_init = {
+	.num_consumer_supplies = ARRAY_SIZE(richtechie_vmmc_consumers),
+	.consumer_supplies = richtechie_vmmc_consumers,
+};
+
+static struct fixed_voltage_config richtechie_vmmc_reg_config = {
+	.supply_name		= "vmmc",
+	.microvolts		= 3300000,
+	.gpio			= -1,
+	.init_data		= &richtechie_vmmc_init,
+};
+
+static struct platform_device richtechie_vmmc_reg_devices = {
+	.name	= "reg-fixed-voltage",
+	.id	= 0,
+	.dev	= {
+		.platform_data = &richtechie_vmmc_reg_config,
+	},
+};
+
+static int __init imx6q_init_audio(void)
+{
+	gpio_request(RICHTECHIE_SPEAKER_EN, "speak_en");
+	gpio_direction_output(RICHTECHIE_SPEAKER_EN, 0);
+	gpio_set_value(RICHTECHIE_SPEAKER_EN, 0);
+
+	mxc_register_device(&mx6_richtechie_audio_wm8960_device,
+			    &wm8960_data);
+
+	imx6q_add_imx_ssi(1, &mx6_richtechie_ssi_pdata);
+
+	mxc_wm8960_init();
+
+	return 0;
+}
 
 
 static struct mxc_dvfs_platform_data richtechie_dvfscore_data = {
@@ -758,13 +1053,49 @@ static void __init mx6_richtechie_board_init(void)
 	i2c_register_board_info(2, mxc_i2c2_board_info,
 			ARRAY_SIZE(mxc_i2c2_board_info));
 
+	imx6q_add_mxc_hdmi(&hdmi_data);
 
+	imx6q_add_anatop_thermal_imx(1, &mx6q_richtechie_anatop_thermal_data);
+
+	imx6q_add_pm_imx(0, &mx6q_richtechie_pm_data);
 	imx6q_add_sdhci_usdhc_imx(3, &mx6q_richtechie_sd4_data);
 	imx6q_add_sdhci_usdhc_imx(2, &mx6q_richtechie_sd3_data);
-
-
+	imx_add_viv_gpu(&imx6_gpu_data, &imx6q_gpu_pdata);
+	imx6q_add_vpu();
+	imx6q_richtechie_init_usb();
+	imx6q_init_audio();
+	platform_device_register(&richtechie_vmmc_reg_devices);
 #ifndef CONFIG_MX6_INTER_LDO_BYPASS
 	mx6_cpu_regulator_init();
+#endif
+	imx_asrc_data.asrc_core_clk = clk_get(NULL, "asrc_clk");
+	imx_asrc_data.asrc_audio_clk = clk_get(NULL, "asrc_serial_clk");
+	imx6q_add_asrc(&imx_asrc_data);
+	imx6q_add_otp();
+	imx6q_add_viim();
+	imx6q_add_imx2_wdt(0, NULL);
+	imx6q_add_dma();
+
+	imx6q_add_dvfs_core(&richtechie_dvfscore_data);
+
+	imx6q_add_ion(0, &imx_ion_data,
+		sizeof(imx_ion_data) + sizeof(struct ion_platform_heap));
+
+	imx6q_add_device_buttons();
+
+	imx6q_add_mxc_pwm(0);
+	imx6q_add_mxc_pwm_backlight(0, &mx6_richtechie_pwm_backlight_data);
+	richtechie_init_lcd();
+
+	imx6q_add_hdmi_soc();
+	imx6q_add_hdmi_soc_dai();
+	imx6q_add_perfmon(0);
+	imx6q_add_perfmon(1);
+	imx6q_add_perfmon(2);
+
+#if 0
+	mxc_register_device(&Data_C07C3220,
+			    &Data_C07C3388);
 #endif
 
 	printk("---richtechie board init end---\015\n");

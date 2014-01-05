@@ -92,23 +92,36 @@
 #define RICHTECHIE_LCD_EN	IMX_GPIO_NR(1, 8)
 #define RICHTECHIE_LDB_PWR	IMX_GPIO_NR(2, 4)
 #define RICHTECHIE_LDB_BACKLIGHT	IMX_GPIO_NR(2, 5)
+#define RICHTECHIE_USB_HOST_PWR_EN	IMX_GPIO_NR(2, 7)
 #define RICHTECHIE_VOLUME_DN	IMX_GPIO_NR(3, 16)
-#define RICHTECHIE_POWER_OFF	IMX_GPIO_NR(3, 18)
+#define RICHTECHIE_POWER_KEY	IMX_GPIO_NR(3, 18)
 #define RICHTECHIE_BACK		IMX_GPIO_NR(3, 19)
 #define RICHTECHIE_VOLUME_UP	IMX_GPIO_NR(3, 20)
 #define RICHTECHIE_USB_OTG_PWR	IMX_GPIO_NR(3, 22)
 #define RICHTECHIE_SPEAKER_EN	IMX_GPIO_NR(3, 31)
 #define RICHTECHIE_SENSOR_INT1	IMX_GPIO_NR(4, 14)
 #define RICHTECHIE_SENSOR_INT2	IMX_GPIO_NR(4, 15)
+#define RICHTECHIE_TEST_1	IMX_GPIO_NR(5, 22)
+#define RICHTECHIE_TEST_2	IMX_GPIO_NR(5, 23)
+#define RICHTECHIE_TEST_3	IMX_GPIO_NR(5, 25)
 #define RICHTECHIE_HEADPHONE_DET	IMX_GPIO_NR(6, 7)
 #define RICHTECHIE_TS_INT		IMX_GPIO_NR(6, 9)
 #define RICHTECHIE_SD3_CD		IMX_GPIO_NR(6, 11)
+#define RICHTECHIE_POWER_OFF	IMX_GPIO_NR(7, 13)
+
 
 extern char *gp_reg_id; //c07fd4f0
 extern char *soc_reg_id; //c07fd504
 extern char *pu_reg_id; //c07fd50c
 
 int Data_c07fd670;
+
+
+void func_c0403510(void)
+{
+
+}
+
 
 static iomux_v3_cfg_t mx6q_sd3_50mhz[] = {
 MX6Q_PAD_SD3_CLK__USDHC3_CLK_50MHZ, //IOMUX_PAD(0x06a4, 0x02bc, 0, 0x0000, 0, 0x17059) /*| MUX_PAD_CTRL(NO_PAD_CTRL)*/, //0x02e0b2 0 000 6a4 2bc,
@@ -766,7 +779,7 @@ static struct imx_ipuv3_platform_data ipu_data[] = {
 }
 
 static struct gpio_keys_button richtechie_buttons[] = {
-	GPIO_BUTTON(RICHTECHIE_POWER_OFF, KEY_POWER, 1, "key-power", 1, 0),
+	GPIO_BUTTON(RICHTECHIE_POWER_KEY, KEY_POWER, 1, "key-power", 1, 0),
 	GPIO_BUTTON(RICHTECHIE_BACK, KEY_BACK, 1, "key-back", 0, 0),
 	GPIO_BUTTON(RICHTECHIE_VOLUME_UP, KEY_VOLUMEUP, 1, "volume-up", 0, 0),
 	GPIO_BUTTON(RICHTECHIE_VOLUME_DN, KEY_VOLUMEDOWN, 1, "volume-down", 0, 0),
@@ -817,6 +830,19 @@ static struct platform_device Data_C07C3220 = {
 static struct {int dummy; } Data_C07C3388 = {
 		0
 };
+
+static struct platform_device Data_C07C33C0 = {
+	.name = "rt_vibrator",
+};
+
+static struct {int dummy; } Data_C07C3528 = {
+		0
+};
+
+static struct platform_device Data_C07C3538 = {
+	.name = "rt_it6251",
+};
+
 
 static struct ion_platform_data imx_ion_data = {
 	.nr = 1,
@@ -961,6 +987,25 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 	}
 }
 
+#define SNVS_LPCR 0x38
+static void mx6_snvs_poweroff(void)
+{
+
+	void __iomem *mx6_snvs_base =  MX6_IO_ADDRESS(MX6Q_SNVS_BASE_ADDR);
+	u32 value;
+	value = readl(mx6_snvs_base + SNVS_LPCR);
+	/*set TOP and DP_EN bit*/
+	writel(value | 0x60, mx6_snvs_base + SNVS_LPCR);
+
+	printk(" rt power off \015\n");
+
+	func_c0403510();
+
+	gpio_request(RICHTECHIE_POWER_OFF, "Power_off");
+	gpio_direction_output(RICHTECHIE_POWER_OFF, 0);
+	gpio_set_value(RICHTECHIE_POWER_OFF, 0);
+}
+
 
 /*!
  * Board specific initialization.
@@ -1093,10 +1138,33 @@ static void __init mx6_richtechie_board_init(void)
 	imx6q_add_perfmon(1);
 	imx6q_add_perfmon(2);
 
-#if 0
+	pm_power_off = mx6_snvs_poweroff;
+
 	mxc_register_device(&Data_C07C3220,
 			    &Data_C07C3388);
-#endif
+	mxc_register_device(&Data_C07C33C0,
+			    &Data_C07C3528);
+	mxc_register_device(&Data_C07C3538,
+			    NULL);
+
+	if (cpu_is_mx6dl()) {
+		imx6dl_add_imx_pxp();
+		imx6dl_add_imx_pxp_client();
+	}
+
+	imx6_add_armpmu();
+	imx6q_add_busfreq();
+
+	gpio_request(RICHTECHIE_USB_HOST_PWR_EN, "usb-HOST_PWR_EN");
+	gpio_direction_output(RICHTECHIE_USB_HOST_PWR_EN, 1);
+	gpio_set_value(RICHTECHIE_USB_HOST_PWR_EN, 1);
+
+	gpio_request(RICHTECHIE_TEST_1, "TEST_1");
+	gpio_direction_output(RICHTECHIE_TEST_1, 0);
+	gpio_request(RICHTECHIE_TEST_2, "TEST_2");
+	gpio_direction_output(RICHTECHIE_TEST_2, 0);
+	gpio_request(RICHTECHIE_TEST_3, "TEST_3");
+	gpio_direction_output(RICHTECHIE_TEST_3, 0);
 
 	printk("---richtechie board init end---\015\n");
 }

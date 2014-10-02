@@ -106,13 +106,14 @@ static struct i2c_client *ldb_i2c_client[2];
 
 static struct fb_videomode ldb_modedb[] = {
 	{
-	 "LDB-XGA", 60, 1024, 768, 15385,
-	 220, 40,
-	 21, 7,
-	 60, 10,
+	 "LDB-XGA", 60, 1280, 800, 1,
+	 50, 40,
+	 2, 20,
+	 50, 1,
 	 0,
 	 FB_VMODE_NONINTERLACED,
 	 FB_MODE_IS_DETAILED,},
+#if 0
 	{
 	 "LDB-1080P60", 60, 1920, 1080, 7692,
 	 100, 40,
@@ -121,6 +122,7 @@ static struct fb_videomode ldb_modedb[] = {
 	 0,
 	 FB_VMODE_NONINTERLACED,
 	 FB_MODE_IS_DETAILED,},
+#endif
 };
 static int ldb_modedb_sz = ARRAY_SIZE(ldb_modedb);
 

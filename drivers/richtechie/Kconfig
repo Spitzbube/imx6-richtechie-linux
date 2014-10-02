@@ -1,0 +1,13 @@
+#
+# RICHTECHIE Configuration
+#
+
+menu "RICHTECHIE_DRIVER"
+
+config RICHTECHIE_DRIVER
+	tristate "Richtechie Driver"
+	depends on ARCH_MX6
+	default y
+
+endmenu
+

@@ -117,12 +117,6 @@ extern char *pu_reg_id; //c07fd50c
 int Data_c07fd670;
 
 
-void func_c0403510(void)
-{
-
-}
-
-
 static iomux_v3_cfg_t mx6q_sd3_50mhz[] = {
 MX6Q_PAD_SD3_CLK__USDHC3_CLK_50MHZ, //IOMUX_PAD(0x06a4, 0x02bc, 0, 0x0000, 0, 0x17059) /*| MUX_PAD_CTRL(NO_PAD_CTRL)*/, //0x02e0b2 0 000 6a4 2bc,
 MX6Q_PAD_SD3_CMD__USDHC3_CMD_50MHZ, //IOMUX_PAD(0x06a0, 0x02b8, 0, 0x0000, 0, 0x17059) /*| MUX_PAD_CTRL(NO_PAD_CTRL)*/, //0x02e0b3 0 000 6a0 2b8,
@@ -285,7 +279,7 @@ enum sd_pad_mode {
 	SD_PAD_MODE_HIGH_SPEED,
 };
 
-static int func_c0061b84(/*unsigned int index,*/ int clock)
+static int plt_sd3_pad_change(/*unsigned int index,*/ int clock)
 {
 	/* LOW speed is the default state of SD pads */
 	static enum sd_pad_mode pad_mode = SD_PAD_MODE_MED_SPEED; //C07C23A0
@@ -346,7 +340,7 @@ static int func_c0061b84(/*unsigned int index,*/ int clock)
 	return 0;
 }
 
-static int func_c0061cb8(/*unsigned int index,*/ int clock)
+static int plt_sd4_pad_change(/*unsigned int index,*/ int clock)
 {
 	/* LOW speed is the default state of SD pads */
 	static enum sd_pad_mode pad_mode = SD_PAD_MODE_MED_SPEED; //C07C2588
@@ -410,7 +404,7 @@ static const struct esdhc_platform_data mx6q_richtechie_sd3_data __initconst = {
 	.delay_line = 5, //0,
 	.cd_type = ESDHC_CD_CONTROLLER,
 	.runtime_pm = true,
-	.platform_pad_change = func_c0061b84,
+	.platform_pad_change = plt_sd3_pad_change,
 };
 
 static const struct esdhc_platform_data mx6q_richtechie_sd4_data __initconst = {
@@ -419,7 +413,7 @@ static const struct esdhc_platform_data mx6q_richtechie_sd4_data __initconst = {
 	.support_8bit = 1,
 	.delay_line = 5, //0,
 	.cd_type = ESDHC_CD_PERMANENT,
-	.platform_pad_change = func_c0061cb8,
+	.platform_pad_change = plt_sd4_pad_change,
 };
 
 
@@ -513,7 +507,7 @@ static int mxc_wm8960_init(void)
 }
 
 
-static void func_c0061f6c/*mx6q_csi0_cam_powerdown*/(int powerdown)
+static void camera_pwdn_control/*mx6q_csi0_cam_powerdown*/(int powerdown)
 {
 #if 0
 	if (powerdown)
@@ -525,7 +519,7 @@ static void func_c0061f6c/*mx6q_csi0_cam_powerdown*/(int powerdown)
 #endif
 }
 
-static void func_c00622a4/*mx6q_csi0_io_init*/(void)
+static void mx6q_csi0_io_init(void)
 {
 #if 0
 	if (cpu_is_mx6q())
@@ -590,8 +584,8 @@ static struct fsl_mxc_camera_platform_data camera_data = {
 	.mclk = 24000000,
 	.mclk_source = 0,
 	.csi = 0,
-	.io_init = func_c00622a4, //mx6q_csi0_io_init,
-	.pwdn = func_c0061f6c, //mx6q_csi0_cam_powerdown,
+	.io_init = mx6q_csi0_io_init,
+	.pwdn = camera_pwdn_control, //mx6q_csi0_cam_powerdown,
 };
 
 
@@ -988,8 +982,9 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 }
 
 #define SNVS_LPCR 0x38
-static void mx6_snvs_poweroff(void)
+static void rt_power_off(void)
 {
+	extern void mcu_power_off(void);
 
 	void __iomem *mx6_snvs_base =  MX6_IO_ADDRESS(MX6Q_SNVS_BASE_ADDR);
 	u32 value;
@@ -999,7 +994,7 @@ static void mx6_snvs_poweroff(void)
 
 	printk(" rt power off \015\n");
 
-	func_c0403510();
+	mcu_power_off();
 
 	gpio_request(RICHTECHIE_POWER_OFF, "Power_off");
 	gpio_direction_output(RICHTECHIE_POWER_OFF, 0);
@@ -1138,7 +1133,7 @@ static void __init mx6_richtechie_board_init(void)
 	imx6q_add_perfmon(1);
 	imx6q_add_perfmon(2);
 
-	pm_power_off = mx6_snvs_poweroff;
+	pm_power_off = rt_power_off;
 
 	mxc_register_device(&Data_C07C3220,
 			    &Data_C07C3388);

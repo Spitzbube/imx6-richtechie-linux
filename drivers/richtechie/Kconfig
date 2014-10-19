@@ -1,13 +1,12 @@
 #
-# RICHTECHIE Configuration
+# richtechie support drivers
 #
 
-menu "RICHTECHIE_DRIVER"
+menu "richtechie support drivers"
 
-config RICHTECHIE_DRIVER
-	tristate "Richtechie Driver"
-	depends on ARCH_MX6
-	default y
+source "drivers/richtechie/mma8452/Kconfig"
+source "drivers/richtechie/battery/Kconfig"
+source "drivers/richtechie/system/Kconfig"
 
 endmenu
 

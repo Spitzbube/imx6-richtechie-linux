@@ -1,0 +1,12 @@
+#
+# richtechie syste control support
+#
+
+menu "richtechie syste control support"
+
+config RT_SYSTEM
+    tristate "richtechie syste control support"
+    depends on ARCH_MX6
+    default y
+
+endmenu

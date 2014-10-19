@@ -127,7 +127,6 @@ static const struct snd_kcontrol_new imx_wm8960_controls[] = {
 
 static int imx_hifi_startup(struct snd_pcm_substream *substream)
 {
-#if 1
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct imx_priv *priv = &card_priv;
@@ -136,16 +135,12 @@ static int imx_hifi_startup(struct snd_pcm_substream *substream)
 	if (!codec_dai->active)
 //		plat->clock_enable(1);
 		clk_enable(priv->Data_40);
-#else
-	printk("imx_hifi_startup: TODO\n");
-#endif
 
 	return 0;
 }
 
 static void imx_hifi_shutdown(struct snd_pcm_substream *substream)
 {
-#if 1
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct imx_priv *priv = &card_priv;
@@ -154,9 +149,6 @@ static void imx_hifi_shutdown(struct snd_pcm_substream *substream)
 	if (!codec_dai->active)
 //		plat->clock_enable(0);
 		clk_disable(priv->Data_40);
-#else
-	printk("imx_hifi_shutdown: TODO\n");
-#endif
 
 	return;
 }
@@ -173,7 +165,7 @@ struct _coeff_div
 	//28
 };
 
-static const struct _coeff_div coeff_div[10] = //c0607e74
+static const struct _coeff_div wm8960_audio[10] = //c0607e74
 {
 	{1, 2, 8000,   6144000, 15, 3, 16},
 	{2, 2, 8000,  12288000, 15, 6, 32},
@@ -190,11 +182,11 @@ static const struct _coeff_div coeff_div[10] = //c0607e74
 static inline int get_coeff(unsigned int rate, unsigned int format, unsigned int channels)
 {
 	int i;
-	for (i = 0; i < ARRAY_SIZE(coeff_div); i++)
+	for (i = 0; i < ARRAY_SIZE(wm8960_audio); i++)
 	{
-		if ((coeff_div[i].rate == rate) &&
-				(coeff_div[i].format == format) &&
-				(coeff_div[i].channels == channels))
+		if ((wm8960_audio[i].rate == rate) &&
+				(wm8960_audio[i].format == format) &&
+				(wm8960_audio[i].channels == channels))
 		{
 			return i;
 		}
@@ -260,12 +252,12 @@ static int imx_hifi_hw_params(struct snd_pcm_substream *substream,
 
 	ret = snd_soc_dai_set_pll(codec_dai,
 			1 /*WM8962_FLL_OSC*/, 1 /*WM8962_FLL_OSC*/,
-			priv->sysclk, coeff_div[i].Data_12);
+			priv->sysclk, wm8960_audio[i].Data_12);
 	if (ret < 0)
 		pr_err("Failed to start FLL: %d\n", ret);
 
-	snd_soc_dai_set_clkdiv(codec_dai, WM8960_SYSCLKSEL, coeff_div[i].Data_16);
-	snd_soc_dai_set_clkdiv(codec_dai, WM8960_DACDIV, coeff_div[i].Data_20);
+	snd_soc_dai_set_clkdiv(codec_dai, WM8960_SYSCLKSEL, wm8960_audio[i].Data_16);
+	snd_soc_dai_set_clkdiv(codec_dai, WM8960_DACDIV, wm8960_audio[i].Data_20);
 	snd_soc_dai_set_clkdiv(codec_dai, WM8960_SYSCLKDIV,
 			WM8960_SYSCLK_MCLK | WM8960_SYSCLK_DIV_2);
 
@@ -439,7 +431,6 @@ static DRIVER_ATTR(amic, S_IRUGO | S_IWUSR, show_amic, NULL);
 
 static int imx_wm8960_init(struct snd_soc_pcm_runtime *rtd)
 {
-#if 1
 	struct snd_soc_codec *codec = rtd->codec;
 	struct imx_priv *priv = &card_priv;
 	struct platform_device *pdev = priv->pdev;
@@ -486,7 +477,6 @@ static int imx_wm8960_init(struct snd_soc_pcm_runtime *rtd)
 				return ret;
 			}
 		}
-#endif
 
 #if 0
 	if (plat->mic_gpio != -1) {
@@ -519,10 +509,6 @@ static int imx_wm8960_init(struct snd_soc_pcm_runtime *rtd)
 		snd_soc_dapm_nc_pin(&codec->dapm, "DMIC");
 #endif
 
-#if 0
-	printk("imx_wm8960_init: TODO\n");
-#endif
-
 	return 0;
 }
 
@@ -536,8 +522,8 @@ static struct snd_soc_dai_link imx_dai[] = {
 	{
 		.name = "HiFi",
 		.stream_name = "HiFi",
-		.codec_dai_name	= "wm8960-hifi", //"wm8962",
-		.codec_name	= "wm8960-codec.1-001a", //"wm8962.0-001a",
+		.codec_dai_name	= "wm8960-hifi",
+		.codec_name	= "wm8960-codec.1-001a",
 		.cpu_dai_name	= "imx-ssi.1",
 		.platform_name	= "imx-pcm-audio.1",
 		.init		= imx_wm8960_init,
@@ -577,7 +563,6 @@ static int imx_audmux_config(int slave, int master)
  */
 static int __devinit imx_wm8960_probe(struct platform_device *pdev)
 {
-#if 1
 	struct mxc_audio_platform_data *plat = pdev->dev.platform_data;
 	struct imx_priv *priv = &card_priv;
 	int ret = 0;
@@ -602,15 +587,10 @@ static int __devinit imx_wm8960_probe(struct platform_device *pdev)
 	priv->sysclk = plat->sysclk;
 
 	return ret;
-#else
-	printk("imx_wm8960_probe: TODO\n");
-	return 0;
-#endif
 }
 
 static int __devexit imx_wm8960_remove(struct platform_device *pdev)
 {
-#if 1
 	struct mxc_audio_platform_data *plat = pdev->dev.platform_data;
 
 	if (plat->finit)
@@ -618,9 +598,6 @@ static int __devexit imx_wm8960_remove(struct platform_device *pdev)
 
 	clk_disable(card_priv.Data_40);
 	clk_put(card_priv.Data_40);
-#else
-	printk("imx_wm8960_remove: TODO\n");
-#endif
 
 	return 0;
 }

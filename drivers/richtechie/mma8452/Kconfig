@@ -1,0 +1,12 @@
+#
+# MMA8452 support
+#
+
+menu "MMA8452 support"
+
+config RT_MMA8452
+    tristate "MMA8452 support"
+    depends on ARCH_MX6
+    default y
+
+endmenu

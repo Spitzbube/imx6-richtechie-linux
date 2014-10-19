@@ -1,0 +1,12 @@
+#
+# battery support
+#
+
+menu "battery support"
+
+config RT_BATTERY
+    tristate "battery support"
+    depends on ARCH_MX6
+    default y
+
+endmenu

@@ -52,6 +52,7 @@
 #include <linux/regulator/machine.h>
 #include <linux/regulator/fixed.h>
 #include <linux/mfd/mxc-hdmi-core.h>
+#include <linux/richtechie/rt_battery.h>
 
 #include <mach/common.h>
 #include <mach/hardware.h>
@@ -90,8 +91,10 @@
 //#define IMX_GPIO_NR(bank, nr)		(((bank) - 1) * 32 + (nr))
 //#define SABRESD_USB_H1_PWR	IMX_GPIO_NR(1, 29)
 #define RICHTECHIE_LCD_EN	IMX_GPIO_NR(1, 8)
+#define RICHTECHIE_AC_CHARGING	IMX_GPIO_NR(1, 11)
 #define RICHTECHIE_LDB_PWR	IMX_GPIO_NR(2, 4)
 #define RICHTECHIE_LDB_BACKLIGHT	IMX_GPIO_NR(2, 5)
+#define RICHTECHIE_AC_DET			IMX_GPIO_NR(2, 6)
 #define RICHTECHIE_USB_HOST_PWR_EN	IMX_GPIO_NR(2, 7)
 #define RICHTECHIE_VOLUME_DN	IMX_GPIO_NR(3, 16)
 #define RICHTECHIE_POWER_KEY	IMX_GPIO_NR(3, 18)
@@ -575,10 +578,27 @@ struct
 	int dummy;
 } Data_c07c36e8 = {0xa9};
 
-struct
+
+static void init_battery_adp_det(void)
 {
-	int dummy;
-} Data_c07c371c = {/*func_c0061e08*/};
+	gpio_request(RICHTECHIE_AC_DET, "ac_det");
+	gpio_direction_input(RICHTECHIE_AC_DET);
+
+	gpio_request(RICHTECHIE_AC_CHARGING, "ac_charging");
+	gpio_direction_input(RICHTECHIE_AC_CHARGING);
+}
+
+static int get_ac_status(void)
+{
+	return gpio_get_value(RICHTECHIE_AC_DET);
+}
+
+static struct rt_battery_platform_data Data_c07c371c = { //c07c371c
+	.Func_12 = init_battery_adp_det,
+	.Func_0 = get_ac_status,
+	.irq = 294,
+	/*todo*/
+};
 
 static struct fsl_mxc_camera_platform_data camera_data = {
 	.mclk = 24000000,
@@ -1163,6 +1183,8 @@ static void __init mx6_richtechie_board_init(void)
 
 	printk("---richtechie board init end---\015\n");
 }
+
+atomic_t Data_c07c36a0 = ATOMIC_INIT(1); //c07c36a0
 
 extern void __iomem *twd_base;
 static void __init mx6_richtechie_timer_init(void)
